@@ -1,4 +1,4 @@
-# Bayesian Analysis: Modeling for Medical Insurance Costs Bayesian
+# Bayesian Analysis: Modeling for Medical Insurance Costs
 
 To create optimal medical insurance products, insurers rely on historical data to estimate individual medical expenses. This data allows for precise pricing models, strategic insurance planning, and effective portfolio management. The primary goal is to accurately predict insurance costs using various predictor variables. The dataset used for this analysis is available from Synthesized at this URL:  https://www.synthesized.io/data-template-pages/medical-cost-personal-dataset
 
