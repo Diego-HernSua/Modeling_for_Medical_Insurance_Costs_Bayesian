@@ -1,0 +1,539 @@
+---
+title: "Final Project"
+author: "Diego Hernández Suárez"
+date: "2024-05-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Modeling for Medical Insurance Costs: Leveraging Data for Accurate Pricing for Medical Insurances
+
+## Bayesian Data Analysis
+
+### Data Science and Engineering
+
+## Introduction
+
+In order to create optimal medical insurance products, insurers require access to historical data for estimating the medical expenses of individual users. This data enables insurers to develop more precise pricing models, strategize specific insurance outcomes, and effectively manage large portfolios. The overarching goal in all of these scenarios is to make accurate predictions of insurance costs from the predictor variables, this data set can be obtained from the webpage Synthesized, at the following URL: [*https://www.synthesized.io/data-template-pages/medical-cost-personal-dataset*](https://www.synthesized.io/data-template-pages/medical-cost-personal-dataset){.uri}. It is also available at Kaggle ([*https://www.kaggle.com/datasets/mirichoi0218/insurance*](https://www.kaggle.com/datasets/mirichoi0218/insurance)) and GitHub ([*https://gist.github.com/meperezcuello/82a9f1c1c473d6585e750ad2e3c05a41*](https://gist.github.com/meperezcuello/82a9f1c1c473d6585e750ad2e3c05a41)), where it explains the origin of this data.
+
+The data set that is going to be analyzed consists in 1339 medial insurance records, where the objective is to predict the individual medical costs billed by health insurance, measured by the target variable, "Charges". The data set consists on different 6 different variables and the target variable, charges. In the following points I explain a brief description of each column:
+
+-   Age: The age of the insurance contractor **[Numerical]**
+-   Sex: Indicates the insurance contractor gender (male of female) **[Categorical]**
+-   BMI: Body mass index of the client (kg/m\^2) **[Numerical]**
+-   Children: Number of children of the client **[Numerical]**
+-   Smoker: Whether the contractor smokes or not **[Categorical]**
+-   Region: Beneficiary's residential in the United States (northeast/southeast/southwest/northwest) **[Categorical]**
+-   Charges: Individual medical costs billed by health insurance **[Numerical]**
+
+This data set poses various privacy concerns due to its inclusion of personal information about individual users. Consequently, synthetic data was generated to maintain statistical integrity, ensuring a 95% similarity across various machine learning tasks compared to the original dataset. Additionally, all potential risks and threats to compliance with data regulations, such as GDPR, have been mitigated.
+
+\
+Moreover, the process of modeling and deploying artificial intelligence can inadvertently lead to discrimination against certain demographic groups, particularly in scenarios involving sensitive data such as medical records.
+
+### Dataset and Preprocessing
+
+We will start by loading all the libraries that I used during the whole work, remove all the previous information and set the working directory where the data set is established. Furthermore, we will set a random seed.
+
+```{r message = FALSE}
+rm(list=ls())
+library(dplyr)
+library(MCMCpack)
+library(coda)
+library(R2OpenBUGS)
+library(mixAK)
+library(brms)
+```
+
+Lets establish the working directory and set a random seed.
+```{r}
+setwd("C:/Users/diego/OneDrive/Escritorio/Universidad/TERCERO/SEGUNDO SEMESTRE/analisis bayesiano/PROJECT")
+set.seed(123)
+```
+
+Load the data set
+
+```{r}
+data <- read.csv("insurance.csv")
+
+```
+
+Lets have an overview of the data set in order to see the different variables, its characteristics and see how we can modify it in order to be able to work comfortably with the data.
+
+```{r}
+summary(data)
+```
+
+Now we will ensure there is any NA, missing or NaN values, in case there is, we will need to apply certain imputers techniques in order to deal with them.
+
+```{r}
+any_na <- anyNA(data)
+any_na
+any_empty <- any(sapply(data, function(x) length(x[x == ""]) > 0))
+any_empty
+any_nan <- any(is.nan(unlist(data)))
+any_nan
+```
+
+As we can see, there is any of these type of values in the data set, so we can continue working as usual.
+
+Talking about preprocessing, in order to employ bayesian data analysis, we will need to convert all the non numeric variables that we will employ to numeric, in our case, the variables sex and smoker are binary variables that has "Character" class, we will convert it to a numeric variable with values 0 and 1. Where 1 corresponds to male and 0 to females.
+
+```{r}
+class(data$sex)
+data <- data %>% 
+  mutate(sex = ifelse(sex == "male", 1, 0))
+
+```
+
+We employ the same method for smoker, where 1 will correspond to a smoker patient and a 0 to a non-smoker.
+
+```{r}
+class(data$smoker)
+data <- data %>%
+  mutate(smoker = ifelse(smoker == "yes", 1, 0))
+
+```
+```{r}
+train_indices <- sample(1:nrow(data), 0.8*nrow(data)) # 80% for training
+data <- data[train_indices, ] #training
+test_data <- data[-train_indices, ] #test
+
+```
+
+
+During the assignment we will treat this two classes like a common numeric variable, like the rest of the variables studied, after trying several intents, I noticed in this way it was the most optimal way in order to compute the best models possible, rather than dealing with them as binomial classes that brought several problems.
+We must mention that I also decided to scale data and see if it could improve the performance of the models, but agaisnt I was expecting, the performance measurements of the different models (BIC, AIC, R^2...) suffered a degenaration compared to the models without scaled data for the numeric variables.
+
+Lets see a summary of the data after the pre processing and also attach the data.
+
+```{r}
+summary(data)
+attach(data)
+```
+
+## Lineal Models
+
+#### Linear regression model using Markov Chain Monte Carlo sampling techniques
+
+In this section, we will perform a Bayesian linear regression analysis on our medical insurance dataset. The analysis involves estimating the parameters of a linear regression model using Markov Chain Monte Carlo (MCMC) sampling techniques.
+
+We will define a linear regression model where the response variable "charges" is modeled as a function of predictor variables including "age", "sex", "bmi", "children", and "smoker".
+
+Using the MCMCregress function from the MCMCpack package, we will conduct Markov Chain Monte Carlo sampling to obtain posterior distributions of the regression coefficients and other parameters.
+
+```{r}
+
+# MCMC Sampling
+fit <- MCMCregress(charges ~ age + sex + bmi + children + smoker, data = data, burnin = 1000, mcmc = 10000)
+
+# Summary of the posterior distribution
+summary(fit)
+
+```
+
+Lets summarize the posterior distribution of the model parameters. Additionally, we will visualize the convergence of the MCMC chains by plotting trace plots for each parameter and the error term. These trace plots will help assess the convergence and mixing of the MCMC sampler.
+
+We will plot the different chains corresponding to each variable and also for the sigma2.
+
+```{r}
+chains <- as.mcmc(fit)
+
+# Define a vector of colors for each plot
+plot_colors <- c("blue", "red", "green", "purple", "orange", "brown")
+
+# Plotting the trace plots for each parameter
+for (i in 1:6) {
+  plot(chains[, i], main = paste("Trace plot for", colnames(fit)[i]), col = plot_colors[i])
+}
+
+# Plotting the trace plot for the error term
+plot(chains[, "sigma2"], main="Trace plot for sigma2")
+
+```
+
+The trace plots exhibit considerable variability around a mean value, without showing systematic trends or clear autocorrelation patterns. This variability suggests that the chains are effectively exploring the parameter space and converging to a stable sampling distribution. Therefore, these results indicate adequate convergence in the MCMC algorithm used. Furthermore, the other plot displays the distribution of the values, indicating a concentration around the center with slight tails on either side, another positive point indicating a convergence in the model.
+
+Lets compare with the test set and see th R^2 obtained from this initial model.
+
+```{r}
+
+# Generate posterior predictive samples
+posterior_samples <- as.matrix(fit)
+
+# Extract coefficients
+coefficients <- colMeans(posterior_samples)
+
+# Generate design matrix for the test set
+test_design_matrix <- model.matrix(~ test_data$age + test_data$sex + test_data$bmi + test_data$children + test_data$smoker, data = test_data)
+
+# Calculate linear predictor
+linear_predictor <- test_design_matrix %*% coefficients[-1] + coefficients[1]
+
+# Calculate predictions using the inverse link function (identity for Gaussian)
+predictions <- linear_predictor
+
+# Assess model performance (e.g., RMSE, R-squared)
+rmse <- sqrt(mean((test_data$charges - predictions)^2))
+r_squared <- cor(test_data$charges, predictions)^2
+
+rmse
+r_squared
+```
+
+As we can see, we obtain a 0.5918 R^2, which is almost a 60% of accuracy, not a bad result for the first model tried. However, we will try several models in order to find the most optimal one.
+
+#### OpenBUGS
+
+Now lets employ R2OpenBUGS in order to compute the model similar to the previous one, in this case, we will need to establish the priors for each variable and establish the model, which in this case, it will be linear. For the different priors, I used different priors in order to find the most optimal priors, the first one, as the analysis I did at the beginning, where I plotted the histograms for the different variables that were going to be studied and I used that distributions for the model by visualizing plots (normal distribution for bmi, a gamma distribution for age, binomial distribution for sex and smoker). However, the model obtained was much worse than trying with other priors, sometimes the DIC was not even able to be computed, indicating an error when modelling. Furthermore, I tried to employ flat priors among other non informative priors, but even though the model converged, the outputs were not good, as it was appreciable a tendency from the trace plots. For all these reasons, I noticed the most benefitial prior was to use normal distributions for all the predictors priors, as I will later, the trace plots for all the variables were good and noticed a fluctuation without any tendency, indicating a good and optimal convergence.
+
+```{r}
+
+# Define the BUGS model
+lm.bayes <- function(){
+  # Likelihood
+  for (i in 1:n) {
+    charges[i] ~ dnorm(mu[i], tau)
+    mu[i] <- b0 + b_age * age[i] + b_sex * sex[i] + b_bmi * bmi[i] + b_children * children[i] + b_smoker * smoker[i]
+  }
+  
+  # Priors
+  b0 ~ dnorm(0.0, 1.0E-6)  # Prior for intercept
+  b_age ~ dnorm(0.0, 1.0E-6) # Prior for age coefficient
+  b_sex ~ dnorm(0.0, 1.0E-6) # Prior for sex coefficient
+  b_bmi ~ dnorm(0.0, 1.0E-6) # Prior for bmi coefficient
+  b_children ~ dnorm(0.0, 1.0E-6)  # Prior for children coefficient
+  b_smoker ~ dnorm(0.0, 1.0E-6) # Prior for smoker coefficient
+  tau ~ dgamma(0.001, 0.001)  # Prior for error precision
+  sigma2 <- 1 / tau
+  charges.new ~ dnorm(mu.new, sigma2)
+  mu.new <- b0 + b_age * age.new + b_sex * sex.new + b_bmi * bmi.new + b_children * children.new +
+    b_smoker * smoker.new
+}
+```
+
+Lets define the initialization parameters
+
+Now its moment to define the initialization parameters for all the variables in order to execute the model and see the outputs, in our case we will define standard values for the different columns used for the model.
+
+```{r}
+n = length(charges)
+
+data <- list(n=n, charges = charges, age = age, sex = sex, bmi = bmi, children = children,
+             smoker = smoker, age.new = 40, sex.new = 0, bmi.new = 30, children.new = 1,
+             smoker.new = 1)
+inits <- function(){
+  list(b0 = 1, b_age = 0, b_sex = 0, b_bmi = 0, b_children = 0, b_smoker = 0, tau = 0.5, charges.new = 10000)
+}
+```
+
+Finally, we must execute the model and plot the results. It is important to mention that a factor that deteriorate my results where to the lack of number of iterations, that started at 10000, but I obtained not pretty good results, for that reason I increased it to 100000, where I obtained more optimal results.
+
+```{r}
+# Execute the model with bugs
+output <- bugs(data = data, inits = inits, parameters.to.save = c("b0", "b_age","b_sex", "b_bmi",
+"b_children", "b_smoker", "sigma2", "mu.new", "charges.new"), model.file = lm.bayes, n.chains = 1, n.iter = 100000, debug = FALSE)
+
+print(output)
+```
+
+We can show the trace plots and information obtained from the R2OpenBUGS application ![](openbugs_1.png) ![](openbugs_2.png)
+
+From the pictures we can appreciate a good convergence from all the predictors, where it is true that maybe some of them (b0, b_age and b_bmi) did not show a so fulfilled trace plot compared to the other predicts, despite this, they still do not show any tendency or modelling problem and it is clear they converged properly. For the rest of predictors, the trace plot shows a good and strong convergence, as their trace plot fluctuates through all the different possibilities.
+
+Furthermore, we obtained a DIC of 21859.0, which we can yet say if it is a good or a bad score, as we must compare with the rest of the models.
+
+We must almost compute the posterior for the different parameters.
+
+```{r}
+b0.post <-output$sims.list$b0
+b_age.post <-output$sims.list$b_age
+b_sex.post <-output$sims.list$b_sex
+b_bmi.post <-output$sims.list$b_bmi
+b_children.post <- output$sims.list$b_children
+b_smoker.post <- output$sims.list$b_smoker
+sigma2.post <-output$sims.list$sigma2
+mu.new.post <-output$sims.list$mu.new
+charges.new.post <-output$sims.list$charges.new
+```
+
+We could also compute the  autocorrelation function (ACF) in our Bayessian regression analysis in order to see to what extend there exists autocorrelation between the variable and its lagged values at those lags.
+```{r}
+  acf(b0.post)
+  acf(b_age.post)
+  acf(b_sex.post)
+  acf(b_bmi.post)
+  acf(b_children.post)
+  acf(b_smoker.post)
+```
+The ACF plots for all regression coefficients in our Bayesian analysis show short bars, indicating minimal autocorrelation between coefficients and their lagged values. This suggests that samples from the posterior distribution are relatively independent across different lags. This independence reflects good mixing and convergence, ensuring effective exploration of the posterior distribution and reliable inference. The lack of autocorrelation between iterations implies that each sample contributes unique information to the posterior distribution.
+
+We will introduce the different posterior parameters for the predictors in order to plot a scatter plot showing the predicted and actual charges.
+
+```{r}
+beta = cbind(b0.post,b_age.post,b_sex.post,b_bmi.post, b_children.post, b_smoker.post)
+X = cbind(rep(1,length(charges)), age,sex,bmi, children, smoker)
+plot(data$charges, X%*%apply(beta, 2,mean))
+
+```
+
+From the graph we can see a linear tendency from the scatter plot, however, we can computed the MSE, RMSE and R\^2 in order to check to what point our model is doing a good job.
+
+```{r}
+# Calculate Mean Squared Error (MSE)
+MSE <- mean((X %*% apply(beta, 2, mean) - data$charges)^2)
+
+# Calculate Root Mean Squared Error (RMSE)
+RMSE <- sqrt(MSE)
+
+# Calculate R-squared
+SSR <- sum((X %*% apply(beta, 2, mean) - mean(data$charges))^2)
+SST <- sum((data$charges - mean(data$charges))^2)
+R_squared <- SSR / SST
+
+# View the metrics
+MSE
+RMSE
+R_squared
+
+```
+
+From the R\^2 we can check that the predictions obtained are 0.473, which is not a great result, for that reason we must continue searching for better models.
+However, we could compute the credible intervals of 95% of confidence for mu and the target variable.
+
+```{r}
+# Quantiles for mu.new
+quantile(mu.new.post,probs=c(0.025,0.975))
+
+# Quantiles for charges.new
+quantile(charges.new.post,probs=c(0.025,0.975))
+```
+
+#### Frequentist Generalized Linear Models (GLM)
+
+Lets try with more models, for instance, would be interesting to study Generalized Linear Models (GLM), which may adapt and predict better our target variable compared to the previous models.Unlike traditional linear regression models, GLMs can accommodate a wide range of response variable types, including continuous, binary, count, and categorical variables, making them incredibly flexible. In our case, our target variable is continuous but is was worth it to mention it
+
+```{r}
+fit=glm(charges~age+sex+bmi+children+smoker,data=data,family="gaussian")
+summary(fit)
+
+```
+Upon analysis, we find that the GLM exhibits a lower AIC value (27116) compared to the DIC of the Bugs bayessian model (27230.0). This implies that, according to the AIC criterion, the GLM potentially offers a better fit to the data comparing this two coefficients. 
+Furthermore, it is important to mention that we tried with other families in order to study the impact of this argument (using gamma families, inverse Gaussian), however, the best results were obtained by using a gaussian family.
+
+```{r}
+# Generate predictions for the test set
+test_predictions <- predict(fit, newdata = test_data, type = "response")
+
+# Assess model performance 
+rmse <- sqrt(mean((test_data$charges - test_predictions)^2))
+r_squared <- cor(test_data$charges, test_predictions)^2
+print(r_squared)
+
+```
+By using this frequentist approach we improved a little bit more the performance of the model, reaching the 70% which is a good accuracy, anyways, we will keep improving and trying different models.
+
+Lets try to predict the charges of the medical insurrance to a female patient that has 40 years old, a body mass index of 25, one children and do not smoke. 
+After that, we will compare it to another random patient which is a male, who was 52 years, a body mass of 30, has no children and is a frequent smoker.
+
+```{r}
+# Define predictor variable values for the first case (female non-smoker)
+case1 <- data.frame(age = 40, sex = 0, bmi = 25, children = 1, smoker = 0)
+
+# Predict charges for the first case
+charges_case1 <- predict(fit, newdata = case1, type = "response")
+
+# Define predictor variable values for the second case (male smoker)
+case2 <- data.frame(age = 52, sex = 1, bmi = 30, children = 0, smoker = 1)
+
+# Predict charges for the second case
+charges_case2 <- predict(fit, newdata = case2, type = "response")
+
+
+print(paste("Predicted charges for the female non-smoker:", charges_case1))
+print(paste("Predicted charges for the male smoker:", charges_case2))
+
+```
+From the results we can see that the female would have a medical insurance cost of 6598.97 dollars meanwhile the male would have a charge of 34664.27 dollars, this makes sense by using common sense, as the male has attributes that negatively impacts on this target variable, such as the age, the body mass index pretty high and smokes. 
+
+
+### Bayesian Generalized Linear Models (GLM)
+
+Now we will employ a GLM but using a Bayesian approach using the brm() function from the brms package. 
+
+```{r}
+bayesian_glm_lin <- brm(charges ~ age + sex + bmi + children + smoker,
+                    data = data, 
+                    family = gaussian(),
+                    prior = c(prior(normal(0, 1), class = Intercept),
+                              prior(normal(0, 1), class = b)),
+                    control = list(adapt_delta = 0.99),
+                    chains = 4,
+                    cores = 4)
+
+
+summary(bayesian_glm_lin)
+
+# Plot the Bayesian GAM
+plot(bayesian_glm_lin)
+
+# Generate predictions for the test set
+test_predictions <- predict(bayesian_glm_lin, newdata = test_data)
+
+
+rmse <- sqrt(mean((test_data$charges - test_predictions)^2))
+cor <- cor(test_data$charges, test_predictions)^2
+
+rmse
+cor
+
+
+```
+
+We can extract some insights from this model, the estimate is 0.006 and also from the summary of the model we can appreciate that the model converged correctly because Rhat is equal to 1. The sigma estimate is 18328.46 with an estimated error of 382.76. In this case the estimates are close to 0 except the intercept.
+
+### Normal Mixture Markov Chain Monte Carlo
+
+Another model that could be interesting to study are fitting Normal Mixture Markov Chain Monte Carlo models, a bayessian approach in order to fit mixture models to data, where the data is assumed to arise from a mixture of several probability distributions. By plotting a histogram of the target variable, we can see a right skewed tail, where it maybe indicates that there are subpopulations of clients depending on its characteristics, as most clients normally tends to have cheap medical insurances.
+
+Lets start by using a fixed prior with K=2, as we can expect that there exist two sub populations, the most big one which are patient with a lower amount of cost for their medical insurance, and another sub population which consists on the people which health is not good and needs to attend frequently to the doctor.
+
+```{r}
+fit.freq <- NMixEM(charges, K = 2)
+
+x <- seq(min(charges), max(charges), length = 300)
+fx <- dMVNmixture(x, weight = fit.freq$weight, mean = fit.freq$mean, Sigma = rep(fit.freq$Sigma, fit.freq$K))
+
+kprior.fixed <- list(priorK = "fixed", Kmax = 2)
+nMCMC <- c(burn = 5000, keep = 10000, thin = 5, info = 1000)
+fit.bayes_fixed <- NMixMCMC(y0 = charges, prior = kprior.fixed, scale = list(shift = 0, scale = 1), nMCMC = nMCMC, PED = FALSE)
+plot.ts(fit.bayes_fixed$w)  # Posterior distribution of weights
+plot.ts(fit.bayes_fixed$mu) # Posterior distribution of means
+plot.ts(fit.bayes_fixed$Sigma) # Posterior distribution of covariances
+
+print(fit.bayes_fixed$DIC) #22455.07
+```
+As we can see, the DIC from this model is over 22455.07, so it is worse than the previous models studied comparing its DIC, for that reason this model is not highly recommended.
+We will try using now a uniform prior using up the number of components up to 5, in this way the model can compute the most recommended number of components in order to see if we can improve the model.
+
+```{r}
+# Sequence for plotting
+fit.freq <- NMixEM(charges, K = 5)
+x <- seq(min(charges), max(charges), length = 300)
+
+# Generate density estimates
+fx <- dMVNmixture(x, weight = fit.freq$weight, mean = fit.freq$mean, Sigma = rep(fit.freq$Sigma, fit.freq$K))
+
+# MCMC settings
+nMCMC <- c(burn = 5000, keep = 10000, thin = 5, info = 1000)
+
+# Prior specification
+kprior.uniform <- list(priorK = "uniform", Kmax = 5)  
+
+# Fit Bayesian mixture model with a uniform prior
+fit.bayes_uni <- NMixMCMC(y0 = charges, prior = kprior.uniform, scale = list(shift = 0, scale = 1), nMCMC = nMCMC, PED = FALSE)
+
+# Plot posterior distributions
+plot.ts(fit.bayes_uni$w)  # Posterior distribution of weights
+plot.ts(fit.bayes_uni$mu) # Posterior distribution of means
+plot.ts(fit.bayes_uni$Sigma) # Posterior distribution of covariances
+
+print(fit.bayes_uni$DIC) #22232.15
+```
+As we can see, we obtained a better score for DIC compared to use fixed prior, however, is still more higher than other models already done, for that reason, using Mixture Models are not the best option for our case study.
+
+We obtained that the most interesting model was the generalized linear models, which obtain a slightly better score than its competitors, also we must mention the DIC obtained by using OpenBUGS but obtained a worse R2. However, we will try to analyze some non-linear models in order to see if we can improve it.
+
+
+## Non-lineal models
+
+#### Non-linear regression model using Markov Chain Monte Carlo sampling techniques
+
+I also decided to try different non-lineal models in order to see if I could obtain better results. So for my first try I would apply transformations to my predictor variables such as employing m, square roots or using polynomials to some variables.
+
+```{r}
+# Fit Bayesian non linear regression model with transformed variables
+fit <- MCMCregress(charges ~ sqrt(age) + sex + bmi^3 + log(children+1) + smoker^2, data = data)
+
+# Summary of the model
+summary(fit)
+
+
+```
+
+Lets compare with the test set in order to compute R2.
+```{r}
+# Generate posterior predictive samples
+posterior_samples <- as.matrix(fit)
+
+# Extract coefficients
+coefficients <- colMeans(posterior_samples)
+
+# Generate design matrix for the test set
+test_design_matrix <- model.matrix(~ sqrt(age) + sex + bmi + children + smoker^2, data = test_data)
+
+# Calculate linear predictor
+linear_predictor <- test_design_matrix %*% coefficients[-1] + coefficients[1]
+
+# Calculate predictions using the inverse link function
+predictions <- linear_predictor
+
+# Assess model performance (e.g., RMSE, R-squared)
+rmse <- sqrt(mean((test_data$charges - predictions)^2))
+r_squared <- cor(test_data$charges, predictions)^2
+
+r_squared
+```
+
+#### Bayesian Generalized Additive Models (GAM) [Non-linear]
+
+A Bayesian GAM is a statistical model that combines the flexibility of GAMs with Bayesian inference techniques. In traditional frequentist GAMs, smooth functions are used to model non-linear relationships, but the uncertainty around these functions is often not fully accounted for. Bayesian GAMs address this limitation by estimating posterior distributions for model parameters, allowing for uncertainty quantification and providing more robust inference.
+
+To implement the Bayesian GAM, we used the brms package in R. We specified a model formula that included smooth terms (s()) for continuous predictors (in our case, age and bmi) and main effects for categorical predictors. The model was fitted using Markov Chain Monte Carlo (MCMC) sampling, which allowed us to estimate posterior distributions for the model parameters. I tried with different families, such as Gaussian or Gamma in order to see its impact and obtain the best model, but again, the gaussian family was the most adaptable and best option compared to the rest possibilities.
+
+It is important to mention that using s() to specify smooth terms in the formula, we are introducing flexibility into the model, allowing it to capture nonlinear relationships between the predictor variables and the response variable. This makes the model nonlinear in nature.
+
+
+```{r}
+
+
+# Fit Bayesian GAM
+bayesian_gam_non <- brm(charges ~ s(age) + sex + s(bmi) + children + smoker,
+                    data = data, 
+                    family = gaussian(),
+                    prior = c(prior(normal(0, 1), class = Intercept),
+                              prior(normal(0, 1), class = b)),
+                    control = list(adapt_delta = 0.99),
+                    chains = 4,
+                    cores = 4)
+
+
+summary(bayesian_gam_non)
+
+# Plot the Bayesian GAM
+plot(bayesian_gam_non)
+
+# Generate predictions for the test set
+test_predictions <- predict(bayesian_gam_non, newdata = test_data)
+
+# Assess model performance (e.g., RMSE, R-squared)
+rmse <- sqrt(mean((test_data$charges - test_predictions)^2))
+cor <- cor(test_data$charges, test_predictions)^2
+
+rmse
+cor
+
+```
+
+As we can see, we obtained the estimator, with the standard deviation and the quantiles from the correlation of the predicted and the actual values from the test set, this model was also worth it to try in order to have a different approach and explore new models. It is important to mention that the model at the beginning gave different warnings related to divergent transitions after warnup, thats normally because the model can fit properly the data, however this was easily fix by making more flexible the non lineal model by using s() and add a control parameter. As we can see in the Rhat parameter, also known as the Gelman-Rubin statistic which is 1 indicating a good convergence.
+Furthermore from the plots we can appreciate that the model searched among all the possibilities and converged properly. Related to the correlation, we can see that obtained a 0.0064, so basically a very weak postive correlation, so this model is not good in order to predict.
+
+## Conclusions
+After doing this assigment and working with several models, where most of them had a Bayesian approach, however, we also employed some models with a frequentist view in order to compare them and understand which one had the most potential in order to predict our target variable. 
+With respect to the data set, I found pretty interesting to work with data related to the medical records of thousands of people, taking into consideration the high sensitivity and care we must take while handling this type of data. During the work I employed several tools and techniques that we had been using over the whole curse, for instance, OpenBUGS. Also I applied several packages with Bayesian approaches such as MCMCpackage or brms package. 
+If we want to extract information related to the best models, we can notice that the frequentist Generalized Linear Models (GLM) where the best one, which for instance in this case of the frequentist glm, we obtained an accuracy of 0.70, which is not extremely high but taking into consideration the huge variability that the target variable, in this case the insurance cost for a client can take, whichi in our data set was from 1132 dollars to 63770, so the gap between the minimum and maximum value is quite significant, so its normal that the models are not able to predict extremely well the actual cost. From the rest of the models, we had a variety of results, where some models were acceptable and were not good. However, I consider that during the assignment I developed several models in order to compare them and visualize different possibilities.
+
+
