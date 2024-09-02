@@ -25,22 +25,24 @@ c("dplyr", "MCMCpack", "coda", "R2OpenBUGS", "mixAK", "brms")
 
 ---
 
-### Preprocessing
+## Preprocessing
 I applied various modifications to the original dataset, such as converting categorical variables to binary, changing the format of some variables, among other changes, with the goal of making the dataset easier to work with.
 
 ---
 
-### Models employed
-#### Lineal models
+## Models employed
+### Lineal models
 - Markov Chain Monte Carlo sampling techniques
 - OpenBUGS
 - Frequentist Generalized Linear Models (GLM)
 - Bayesian Generalized Linear Models (GLM)
 - Normal Mixture Markov Chain Monte Carlo
 
-#### Non Lineal Models
+### Non Lineal Models
 - Markov Chain Monte Carlo sampling techniques
 - Bayesian Generalized Additive Models (GAM) [Non-linear]
 
-### Conclusions
+---
+
+## Conclusions
 The detailed conclusions and results are presented in the files, where graphs and other relevant information are also shown.
